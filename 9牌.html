@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>扑克牌拖动游戏</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: row;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 20px;
+        }
+
+        #control-panel {
+            display: flex;
+            flex-direction: column;
+            margin-right: 20px;
+        }
+
+        #restart-button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+
+        #timestamp-list {
+            border: 1px solid #ccc;
+            padding: 10px;
+            min-width: 200px;
+        }
+
+        #timestamp-list p {
+            font-size: 16px;
+        }
+
+        #poker-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .poker {
+            width: 80px;
+            height: 120px;
+            background-color: white;
+            border: 1px solid black;
+            border-radius: 5px;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            cursor: move;
+        }
+
+        .poker .top-left,
+        .poker .bottom-right {
+            position: absolute;
+            font-size: 16px;
+            font-family: inherit; /* 使用系统默认字体 */
+        }
+
+        .poker .top-left {
+            top: 5px;
+            left: 5px;
+        }
+
+        .poker .bottom-right {
+            bottom: 5px;
+            right: 5px;
+            transform: rotate(180deg);
+        }
+
+        #target-container {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .target {
+            width: 260px;
+            height: 120px;
+            background-color: lightgray;
+            border: 1px dashed black;
+            border-radius: 5px;
+            display: flex;
+            gap: 10px;
+            padding: 5px;
+        }
+
+        .red-suit {
+            color: red;
+        }
+
+        @keyframes blink {
+            0% {
+                background-color: white;
+            }
+            50% {
+                background-color: yellow;
+            }
+            100% {
+                background-color: white;
+            }
+        }
+
+        .blink {
+            animation: blink 0.3s ease-in-out;
+        }
+
+        #confirm-button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin-top: 20px;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        #result-display {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-top: 40px;
+        }
+
+        #result-display p {
+            min-width: 260px;
+            text-align: center;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="control-panel">
+        <button id="restart-button">开始</button>
+        <div id="timestamp-list">
+            <p>时间戳记录：</p>
+        </div>
+    </div>
+    <div>
+        <div id="poker-container"></div>
+        <div id="target-container">
+            <div class="target" id="target1" ondrop="drop(event)" ondragover="allowDrop(event)"></div>
+            <div class="target" id="target2" ondrop="drop(event)" ondragover="allowDrop(event)"></div>
+            <div class="target" id="target3" ondrop="drop(event)" ondragover="allowDrop(event)"></div>
+        </div>
+        <div id="result-display"></div>
+        <button id="confirm-button" disabled>确认牌组</button>
+    </div>
+    <script>
+        const suits = ['♠', '♥', '♣', '♦'];
+        const ranks = ['A', 'K', 'Q', 'J', '10', '9', '8', '7', '6', '5', '4', '3', '2'];
+        const pokerContainer = document.getElementById('poker-container');
+        const targetContainers = document.querySelectorAll('.target');
+        const restartButton = document.getElementById('restart-button');
+        const timestampList = document.getElementById('timestamp-list');
+        const confirmButton = document.getElementById('confirm-button');
+        const resultDisplay = document.getElementById('result-display');
+        const allCards = [];
+        const rankValues = {
+            'A': 14, 'K': 13, 'Q': 12, 'J': 11, '10': 10, '9': 9, '8': 8, '7': 7, '6': 6, '5': 5, '4': 4, '3': 3, '2': 2
+        };
+        let round = 0;
+
+        // 生成所有扑克牌
+        for (let suit of suits) {
+            for (let rank of ranks) {
+                allCards.push({ suit, rank });
+            }
+        }
+
+        function generateCards() {
+            const selectedCards = [];
+            const availableCards = [...allCards];
+            while (selectedCards.length < 9) {
+                const randomIndex = Math.floor(Math.random() * availableCards.length);
+                const card = availableCards.splice(randomIndex, 1)[0];
+                selectedCards.push(card);
+            }
+
+            // 清空现有扑克牌
+            pokerContainer.innerHTML = '';
+            targetContainers.forEach(container => container.innerHTML = '');
+            resultDisplay.innerHTML = '';
+            confirmButton.disabled = true;
+            confirmButton.style.opacity = 0.5;
+            confirmButton.style.pointerEvents = 'none';
+
+            // 显示扑克牌
+            selectedCards.forEach(card => {
+                const poker = document.createElement('div');
+                poker.className = 'poker';
+                poker.draggable = true;
+                poker.ondragstart = drag;
+
+                const topLeft = document.createElement('span');
+                topLeft.className = 'top-left';
+                topLeft.textContent = `${card.rank}${card.suit}`;
+                if (card.suit === '♥' || card.suit === '♦') {
+                    topLeft.classList.add('red-suit');
+                }
+                poker.appendChild(topLeft);
+
+                const center = document.createElement('span');
+                center.textContent = card.suit;
+                if (card.suit === '♥' || card.suit === '♦') {
+                    center.classList.add('red-suit');
+                }
+                poker.appendChild(center);
+
+                const bottomRight = document.createElement('span');
+                bottomRight.className = 'bottom-right';
+                bottomRight.textContent = `${card.rank}${card.suit}`;
+                if (card.suit === '♥' || card.suit === '♦') {
+                    bottomRight.classList.add('red-suit');
+                }
+                poker.appendChild(bottomRight);
+
+                pokerContainer.appendChild(poker);
+            });
+
+            // 为每张牌添加唯一 ID
+            const pokers = document.querySelectorAll('.poker');
+            pokers.forEach((poker, index) => {
+                poker.id = `poker-${index}`;
+            });
+        }
+
+        function allowDrop(ev) {
+            ev.preventDefault();
+        }
+
+        function drag(ev) {
+            ev.dataTransfer.setData("text", ev.target.id);
+            ev.dataTransfer.effectAllowed = "move";
+        }
+
+        function drop(ev) {
+            ev.preventDefault();
+            const draggedId = ev.dataTransfer.getData("text");
+            const draggedPoker = document.getElementById(draggedId);
+            const target = ev.target;
+            const targetParent = target.closest('.target');
+
+            if (targetParent) {
+                if (targetParent.children.length >= 3 && !target.classList.contains('poker')) {
+                    return;
+                }
+                if (target.classList.contains('poker')) {
+                    const originalParent = target.parentNode;
+                    const originalIndex = Array.from(originalParent.children).indexOf(target);
+
+                    const draggedParent = draggedPoker.parentNode;
+                    const draggedIndex = Array.from(draggedParent.children).indexOf(draggedPoker);
+
+                    originalParent.insertBefore(draggedPoker, target);
+                    draggedParent.insertBefore(target, draggedParent.children[draggedIndex]);
+
+                    // 添加闪烁效果
+                    draggedPoker.classList.add('blink');
+                    target.classList.add('blink');
+                    setTimeout(() => {
+                        draggedPoker.classList.remove('blink');
+                        target.classList.remove('blink');
+                    }, 300);
+                } else {
+                    targetParent.appendChild(draggedPoker);
+                }
+                sortCardsInTarget(targetParent);
+            }
+
+            checkTargetContainers();
+            updateResultDisplay();
+        }
+
+        function sortCardsInTarget(target) {
+            const cards = Array.from(target.children);
+            cards.sort((a, b) => {
+                const rankA = a.querySelector('.top-left').textContent.slice(0, -1);
+                const rankB = b.querySelector('.top-left').textContent.slice(0, -1);
+                return rankValues[rankB] - rankValues[rankA];
+            });
+            cards.forEach(card => target.appendChild(card));
+        }
+
+        function recordTimestamp() {
+            round++;
+            const now = new Date();
+            const timestamp = now.toLocaleString();
+            const p = document.createElement('p');
+            p.textContent = `回合 ${round}: ${timestamp}`;
+            timestampList.appendChild(p);
+
+            const timestamps = timestampList.querySelectorAll('p:not(:first-child)');
+            if (timestamps.length > 5) {
+                timestampList.removeChild(timestamps[0]);
+            }
+        }
+
+        function checkTargetContainers() {
+            const allFull = Array.from(targetContainers).every(container => container.children.length === 3);
+            if (allFull) {
+                confirmButton.disabled = false;
+                confirmButton.style.opacity = 1;
+                confirmButton.style.pointerEvents = 'auto';
+            } else {
+                confirmButton.disabled = true;
+                confirmButton.style.opacity = 0.5;
+                confirmButton.style.pointerEvents = 'none';
+            }
+        }
+
+        function getHandRank(cards) {
+            const ranks = cards.map(card => card.querySelector('.top-left').textContent.slice(0, -1));
+            const suits = cards.map(card => card.querySelector('.top-left').textContent.slice(-1));
+            const rankCounts = {};
+            ranks.forEach(rank => {
+                rankCounts[rank] = (rankCounts[rank] || 0) + 1;
+            });
+            const isFlush = new Set(suits).size === 1;
+            const isStraight = Object.values(rankCounts).every(count => count === 1) &&
+                ranks.sort((a, b) => rankValues[a] - rankValues[b]).every((rank, index, arr) => {
+                    return index === 0 || rankValues[rank] === rankValues[arr[index - 1]] - 1;
+                });
+
+            if (isFlush && isStraight) {
+                return `同花顺 ${ranks[0]}最大`;
+            } else if (Object.values(rankCounts).includes(3)) {
+                return `炸弹 ${Object.keys(rankCounts).find(rank => rankCounts[rank] === 3)}`;
+            } else if (isFlush) {
+                return `金花 ${ranks[0]}最大`;
+            } else if (isStraight) {
+                return `顺子 ${ranks[0]}最大`;
+            } else if (Object.values(rankCounts).includes(2)) {
+                return `对 ${Object.keys(rankCounts).find(rank => rankCounts[rank] === 2)}`;
+            } else {
+                return `小牌 ${ranks[0]}最大`;
+            }
+        }
+
+        function updateResultDisplay() {
+            resultDisplay.innerHTML = '';
+            targetContainers.forEach((container, index) => {
+                const cards = Array.from(container.children);
+                if (cards.length === 3) {
+                    const handRank = getHandRank(cards);
+                    const p = document.createElement('p');
+                    p.textContent = `第 ${index + 1} 组: ${handRank}`;
+                    resultDisplay.appendChild(p);
+                }
+            });
+        }
+
+        restartButton.addEventListener('click', () => {
+            if (restartButton.textContent === '开始') {
+                restartButton.textContent = '重新开始';
+            }
+            restartButton.disabled = true;
+            recordTimestamp();
+            generateCards();
+        });
+
+        confirmButton.addEventListener('click', () => {
+            restartButton.disabled = false;
+            confirmButton.disabled = true;
+            confirmButton.style.opacity = 0.5;
+            confirmButton.style.pointerEvents = 'none';
+        });
+    </script>
+</body>
+
+</html>
+    
